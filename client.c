@@ -57,8 +57,8 @@ while(1){
     else printf("Socket created\n" );
 
     // 3. Server details
-    //printf("Enter IP address of server: ");   // ask user for IP address of server
-    //scanf("%20s", serverIP);  // get IP address as string
+    printf("Enter IP address of server: ");   // ask user for IP address of server
+    scanf("%20s", serverIP);  // get IP address as string
 
     //printf("Enter port number: ");
    // scanf("%d", &serverPort);     // get port number as integer

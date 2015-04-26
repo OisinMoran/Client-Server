@@ -189,7 +189,9 @@ int main()  {
                     }
                 }
             }while (!stop);
+            stop = 0;
         }
+
 
         // 5.3 Remove file from server
         else if(command == 'r') {

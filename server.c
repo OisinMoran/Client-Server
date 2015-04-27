@@ -83,7 +83,7 @@ int SendFile(char * filename, SOCKET *cSocket, char * response){
 		retVal = send(*cSocket, response, nIn, 0);
 		sendCheck(retVal);
 		if(retVal == SOCKET_ERROR)
-            return -1;
+            return -2;
         bytesSinceLastClock += retVal;
         if(bytesSinceLastClock >= 5000000){
             putchar('\r');
@@ -192,7 +192,7 @@ int main(){
     // function htonl() converts 32-bit integer to network format
     // INADDR_ANY means we accept connection on any IP address
     service.sin_port = htons(SERV_PORT);  // set port number
-    // function htons() converts 16-bit integer to netwsend(cSocket, response, nIn+1, 0);ork format
+    // function htons() converts 16-bit integer to network format
 
     // Bind the socket to the IP address and port just defined
     retVal = bind(serverSocket, (SOCKADDR *) &service, sizeof(service));
@@ -265,18 +265,18 @@ int main(){
 			headerlen = strlen(request)+1; // Evaluate header length
 			if(nRx > headerlen){ // Move any non header bytes to the beginning of the request array
 				memcpy(request, headerlen + request,nRx-headerlen);
-				headerlen = nRx-headerlen; // Store amount of non header bytes in array to "headerlen"
+				nRx-=headerlen; // Store amount of non header bytes in array to nRx
 			}
-			else headerlen = 0; // Set headerlen to 0 since there are no non header bytes left in the array
+			else nRx = 0; // Set nRx to 0 since there are no non header bytes left in the array
 
-			for(i=0; i!= headerlen; i++){ // Check to see if the entire second header (the filename) is in the array
+			for(i=0; i!= nRx; i++){ // Check to see if the entire second header (the filename) is in the array
 				if(request[i] == '\0'){
 					nullfound = 1; // if null is found, the second header is complete 
 					break;
 				}
 			}
 			if(!nullfound)// if null not found in array, use getStr() to receive the rest of the filename
-				getStr(&cSocket, request+headerlen, BUFF_SIZE);
+				getStr(&cSocket, request+nRx, BUFF_SIZE);
 			strcpy(filename, request);
 			printf("Filename: %s\n", filename);
 			
@@ -288,6 +288,7 @@ int main(){
 				fclose(file);
 				continue;
 			}else{
+				fclose(file);
 				file = fopen(filename, "wb");
 				if (file == NULL){
 					perror("Error opening file");
@@ -301,11 +302,10 @@ int main(){
 				}
                 timeint = clock();
                 bytesSinceLastClock = 0;
-				while(filesize > 0){
+				while(filesize > 0){// receiving loop
 					nRx = recv(cSocket, request, BUFF_SIZE, 0);
 					recvCheck(nRx);
 					if (nRx<0){
-					    fclose(file);
                         break;
 					}
 					filesize -= nRx;
@@ -336,13 +336,12 @@ int main(){
 			}
 			else
                 printf("\nFile sent\n");
-		}else if(request[0] == 'l'){
-
+		}else if(request[0] == 'l'){//list dir
             if(RunCmd("dir", &cSocket) == 1)
                 printf("Server Directory Contents sent\n");
             else
                 printf("Command FAILED!!\n");
-		}else if(request[0]=='r'){
+		}else if(request[0]=='r'){//Remove file
             if(remove(request+1) != 0){
                 perror( "Error deleting file\n" );
                 response[0]='e';

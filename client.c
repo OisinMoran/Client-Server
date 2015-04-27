@@ -5,9 +5,8 @@
 #include <math.h>
 #include <conio.h>
 
-#define REQUEST_BUFFER_SIZE 100
-#define REPLY_BUFFER_SIZE 50001
-#define DATA_BUFFER_SIZE 50000
+#define REQUEST_BUFFER_SIZE 112
+#define BUFFER_SIZE 50000
 #define IP_ADDRESS_SIZE 20
 #define MAX_FILENAME_SIZE 100
 
@@ -23,8 +22,8 @@ int main()  {
     int retVal, read, nRx, j, written, remaining, filesize; // counters & flags for loops
     int totalbytes = 0, nullpos = -1, firstblock = 1, details = 0, stop = 0; // counters & flags for loops
     char request[REQUEST_BUFFER_SIZE]; // array to hold request bytes
-    char reply[REPLY_BUFFER_SIZE];     // array to hold received bytes
-    char data[DATA_BUFFER_SIZE];       // array to hold data from data extraction
+    char reply[BUFFER_SIZE];     // array to hold received bytes
+    char data[BUFFER_SIZE];       // array to hold data from data extraction
     char filename[MAX_FILENAME_SIZE];  // array to hold filename of transfer file
     char serverIP[IP_ADDRESS_SIZE];    // array to hold IP address of server
     char command = '\0';               // character to hold user command
@@ -196,7 +195,7 @@ int main()  {
         // 5.3 Remove file from server
         else if(command == 'r') {
             // Ask user for name of file to delete
-            printf("\nEnter filename of file to delete (example.ext):");
+            printf("\nEnter filename of file to delete (example.ext): ");
             scanf("%s", filename);
 
             // First element of request array is transfer command
@@ -222,7 +221,7 @@ int main()  {
         // 5.4 Upload (safe or force)
         else if(command == 'u' || command == 'f') {
             // Ask user for name of file to upload
-            printf("\nEnter filename of file to upload (example.ext):");
+            printf("\nEnter filename of file to upload (example.ext): ");
             scanf("%s", filename);
 
             // Open file for binary read & check for error
@@ -291,11 +290,11 @@ int main()  {
             // File upload
             // 'k' indicates server is approving upload
             if(indicator == 'k')    {
-                // Send data in blocks of size DATA_BUFFER_SIZE
+                // Send data in blocks of size BUFFER_SIZE
                 remaining = filesize;
                 while(feof(fp) == 0 && ferror(fp) == 0) {
                     // Read data from file
-                    read = (int)fread(data, 1, DATA_BUFFER_SIZE, fp);
+                    read = (int)fread(data, 1, BUFFER_SIZE, fp);
 
                     // Check for error
                     if (ferror(fp)) {
@@ -328,7 +327,7 @@ int main()  {
         // 5.5 Download
         else if(command == 'd') {
             // Ask user for name of file to download
-            printf("\nEnter filename of file to download (example.ext):");
+            printf("\nEnter filename of file to download (example.ext): ");
             scanf("%s", filename);
 
             // First element of request array is transfer command
@@ -390,7 +389,7 @@ int main()  {
                     if(debug == 'd') printf("\t\tWrote %d bytes to file", written);
 
                     // Check for error
-                    if (written != nRx - j) fprintf(stderr, "Writing error: count: %d written: %d\n", nRx - j, written);
+                    if (written != nRx - j) fprintf(stderr, "Writing error - count: %d written: %d\n", nRx - j, written);
 
                     // Not first block
                     if (firstblock != 1) totalbytes += nRx;

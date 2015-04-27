@@ -22,8 +22,8 @@ int main()  {
     int retVal, read, nRx, j, written, remaining, filesize; // counters & flags for loops
     int totalbytes = 0, nullpos = -1, firstblock = 1, details = 0, stop = 0; // counters & flags for loops
     char request[REQUEST_BUFFER_SIZE]; // array to hold request bytes
-    char reply[BUFFER_SIZE];     // array to hold received bytes
-    char data[BUFFER_SIZE];       // array to hold data from data extraction
+    char reply[BUFFER_SIZE];           // array to hold received bytes
+    char data[BUFFER_SIZE];            // array to hold data from data extraction
     char filename[MAX_FILENAME_SIZE];  // array to hold filename of transfer file
     char serverIP[IP_ADDRESS_SIZE];    // array to hold IP address of server
     char command = '\0';               // character to hold user command

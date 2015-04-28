@@ -10,10 +10,10 @@
 #define IP_ADDRESS_SIZE 20
 #define MAX_FILENAME_SIZE 100
 
-void printError(void);  // function to display error messages
-void TootOwnHorn(void); // function to toot own horn
-void print_progress(int filesize, int totalbytes); // function to display progress of transfer
-int no_digs(int); // function to calculate the number of digits in an integer
+void printError(void);                              // function to display error messages
+void TootOwnHorn(void);                             // function to toot own horn
+void print_progress(int filesize, int totalbytes);  // function to display progress of transfer
+int no_digs(int);                                   // function to calculate the number of digits in an integer
 
 int main()  {
 
@@ -140,7 +140,7 @@ int main()  {
             request[0] = command;
             request[1] = '\0';
 
-            // Send request array
+            // Send request array making sure to also send the null character
             retVal = send(clientSocket, request, strlen(request) + 1, 0);
             // send() arguments: socket handle, array of bytes to send,
             // number of bytes to send, and last argument of 0.
@@ -153,12 +153,13 @@ int main()  {
             }
 
             // Loop to receive list of files
+            // Make sure stop flag is correctly set
             stop = 0;
             do {
                 // Try to receive some bytes
                 // recv() arguments: socket handle, array to hold rx bytes,
                 // maximum number of bytes to receive, last argument 0.
-                nRx = recv(clientSocket, reply, 100, 0);
+                nRx = recv(clientSocket, reply, REQUEST_BUFFER_SIZE, 0);
                 // nRx will be number of bytes received, or error indicator
 
                 // Check for error
@@ -176,6 +177,7 @@ int main()  {
                 // Otherwise, we got some data
                 else if (nRx > 0)   {
                     // Check if the received block is the final block
+                    // Last element will be '\0' if it is final block
                     if(reply[nRx-1] == '\0') {
                         printf("%s", reply);
                         stop = 1; // If final block, exit receiving loop
@@ -183,14 +185,15 @@ int main()  {
 
                     // If not final block, print & keep receiving
                     else {
+                        // Set element after final element to '\0' to safely print as string
                         reply[nRx] = '\0';
                         printf("%s", reply);
                     }
                 }
             }while (!stop);
-            stop = 0;
+            // Stop is reused later in the program so must be reset
+            stop = 0; 
         }
-
 
         // 5.3 Remove file from server
         else if(command == 'r') {
@@ -204,7 +207,7 @@ int main()  {
             // Assign filename to the next available element of request array
             sprintf(request + 1, "%s", filename);
 
-            // Send request array
+            // Send request array making sure to also send the null character
             retVal = send(clientSocket, request, strlen(request) + 1, 0);
             // send() arguments: socket handle, array of bytes to send,
             // number of bytes to send, and last argument of 0.
@@ -249,9 +252,12 @@ int main()  {
             no_digs_filesize = no_digs(filesize);
 
             // Assign filename to the next avaiable element of request array
+            // Shifted by one command character, one null character and the size of the filesize
             sprintf(request + (2 + no_digs_filesize), "%s", filename);
 
-            // Send request array
+            // Send request array making sure to also send the null character
+            // Size account for 2 null characters, one command character, 
+            // the size of the filesize and the size of the filename.
             retVal = send(clientSocket, request, (3 + no_digs_filesize + strlen(filename)), 0);
             // send() arguments: socket handle, array of bytes to send,
             // number of bytes to send, and last argument of 0.
@@ -316,6 +322,7 @@ int main()  {
 
                     // Update counters and print progress
                     remaining -= read;
+                    // print_progress takes filesize and total bytes sent as args
                     print_progress(filesize, filesize - remaining);
                  }
                 // Toot the horn and close the file
@@ -336,7 +343,7 @@ int main()  {
             // Assign filename to the next available element of request array
             sprintf(request + 1, "%s", filename);
 
-            // Send request array
+            // Send request array making sure to send the null character
             retVal = send(clientSocket, request, strlen(request) + 1, 0);
             // send() arguments: socket handle, array of bytes to send,
             // number of bytes to send, and last argument of 0.
@@ -355,8 +362,9 @@ int main()  {
                 // Try to receive some bytes
                 // recv() arguments: socket handle, array to hold rx bytes,
                 // maximum number of bytes to receive, last argument 0.
-                nRx = recv(clientSocket, reply, 50000, 0);
+                nRx = recv(clientSocket, reply, BUFFER_SIZE, 0);
                 // nRx will be number of bytes received, or error indicator
+                // If server sends only an x the file does not exist
                 if(reply[0] == 'x' && firstblock == 1) {
                     printf("File does not exist\n\n");
                     break;
@@ -377,6 +385,8 @@ int main()  {
                 // Otherwise we got some data
                 else if (nRx > 0) {
                     // Find end of file size marked by a null
+                    // This will set j to zero on every run but will 
+                    // have no other effect after it has originally found the null character
                     for (j = 0; nullpos == -1; j++) if(reply[j] == '\0') nullpos = j;
 
                     if (firstblock == 1) {
@@ -407,6 +417,7 @@ int main()  {
                 // Continue until all file received, error or connection closed
             } while ((totalbytes < filesize) && (stop == 0));
 
+            // Check exit condition
             if(totalbytes >= filesize)   {
                 TootOwnHorn();
                 fclose(fp);

@@ -38,13 +38,15 @@ void sendCheck(int ret){
 // Used for listing server directory
 int RunCmd(char * cmd, SOCKET *cSock){
 	FILE* pipe =  NULL;
-	char out[500];
+	char out[500];//buffer for storing pipe contents
 	int read = 0;
 	int retVal;
+	//Run command "cmd" and pipe its output to "pipe"
 	if((pipe = _popen(cmd, "rt")) == NULL){
-	    printf("aww Man\n");
+	    printf("_popen failed\n");
 		return -1;
 	}
+	//loop that sends buffers of the command output until end of pipe
 	while(!feof(pipe)){
         read = fread(out, 1, 500-1, pipe);
         retVal = send(*cSock, out, read, 0);
@@ -52,6 +54,7 @@ int RunCmd(char * cmd, SOCKET *cSock){
         if(retVal == SOCKET_ERROR)
             return -1;
 	}
+	//send the null character indicating the end of the transmission 
 	out[0]='\0';
 	send(*cSock, out, 1, 0);
 	return 1;
@@ -61,34 +64,52 @@ int RunCmd(char * cmd, SOCKET *cSock){
 // The array "response" is used to read the file in blocks
 int SendFile(char * filename, SOCKET *cSocket, char * response){
     int filesize;
+	
+	//open file to be sent
 	FILE *file = fopen(filename,"rb");
 	if(file == 0){
 		printf("File error\n");
 		return -1;
 	}
-
+	
+	//find file size
 	fseek(file,0, SEEK_END);
 	filesize=ftell(file);
+	
+	//convert filesize from int to string
 	sprintf(response,"%d", filesize);
+	
+	//find the amount of digits in the filesize
 	int nIn = strlen(response);
+	
+	//send filesize (header) to the client
 	retVal = send(*cSocket, response, nIn+1, 0);
 	sendCheck(retVal);
 	if(retVal == SOCKET_ERROR)
         return -1;
+	
+	//return to the start of the file
 	fseek(file, 0, SEEK_SET);
-	timeint= clock();
+	
+	//set up variables used to estimate byte rate
+	timeint = clock();
     bytesSinceLastClock = 0;
+	
+	//loop that sends the file in buffers of size BUFF_SIZE to the client
 	while(!feof(file)){
 		nIn= fread(response, 1, BUFF_SIZE,file);
 		retVal = send(*cSocket, response, nIn, 0);
 		sendCheck(retVal);
 		if(retVal == SOCKET_ERROR)
             return -2;
+		
+		//Estimate and print byte rate of the last 5MBs
         bytesSinceLastClock += retVal;
         if(bytesSinceLastClock >= 5000000){
             putchar('\r');
-            printf("Bit Rate: %.2lf kB/s        ",(bytesSinceLastClock/((clock()-timeint)/(double)CLOCKS_PER_SEC))/1000);
-            bytesSinceLastClock = 0;
+            printf("Byte Rate: %.2lf kB/s        ",(bytesSinceLastClock/((clock()-timeint)/(double)CLOCKS_PER_SEC))/1000);
+		//Reset variables used to estimate byte rate
+			bytesSinceLastClock = 0;
             timeint = clock ();
         }
 	}
@@ -103,20 +124,29 @@ int getStr(SOCKET* cSocket,char *request, int Max){
     int size;
     int i;
     int TotalSize = 0;
+	
+	//loop untill either null is received or Max exceeded
     while(!nullfound && TotalSize < Max){
+		
+		//Receive block of bytes and write to request array after existing elements
         size = recv(*cSocket, request+TotalSize, Max-TotalSize, 0);
 		recvCheck(size);
         if(size <= 0){
 			return -1;//recvError
 		}
+		
+		//Loop to check if the bytes just received contain null
         for(i = TotalSize; i!= TotalSize+size; i++){
             if(request[i] == '\0')
                 nullfound = 1;
         }
         TotalSize += size;
     }
+	
     if(!nullfound)
         return -2;//string not found
+
+	//return total amount of bytes received
     return TotalSize;
 }
 
@@ -254,7 +284,7 @@ int main(){
 		if(nRx < 0){// If getStr() fails return to the start of the loop. (getStr() will print any errors)
 			continue;
 		}
-        overwrite = 0; //set ovewrite flag to false
+        overwrite = 0; //set overwrite flag to false
 		if(request[0]=='u'||request[0]=='f'){// Check first char in header to determine request type
 		    if(request[0] == 'f'){
 		        overwrite = 1; // Overwrite set to true if user wants to force upload
@@ -277,73 +307,97 @@ int main(){
 			}
 			if(!nullfound)// if null not found in array, use getStr() to receive the rest of the filename
 				getStr(&cSocket, request+nRx, BUFF_SIZE);
+				
+			//Now copy the file name from request to filename
 			strcpy(filename, request);
 			printf("Filename: %s\n", filename);
 			
+			
+			//if not in overwrite mode, check if the file exists
 			if((file = fopen(filename, "rb")) != NULL && !overwrite){
 				printf("File exists\n");
 				response[0] = 'f';
+				//since it exists send 'f' back to client
 				retVal = send(cSocket, response, 1, 0);
 				sendCheck(retVal);
 				fclose(file);
+				//return to start of server loop
 				continue;
 			}else{
+				//ensure file is closed
 				fclose(file);
+				
+				//open file in write mode. This truncates the file.
 				file = fopen(filename, "wb");
 				if (file == NULL){
 					perror("Error opening file");
 					continue;
 				}
+				//respond with 'k' if file opened successfully 
 				response[0] = 'k';
 				retVal = send(cSocket, response, 1, 0);
 				sendCheck(retVal);
 				if(retVal == SOCKET_ERROR){
 					continue;
 				}
+				
+				//set up variables used to estimate byte rate
                 timeint = clock();
                 bytesSinceLastClock = 0;
-				while(filesize > 0){// receiving loop
+				while(filesize > 0){// receiving loop, end when we have received the correct amount of bytes
 					nRx = recv(cSocket, request, BUFF_SIZE, 0);
 					recvCheck(nRx);
 					if (nRx<0){
                         break;
 					}
+					//decrement filesize with the amount of received bytes
 					filesize -= nRx;
+					//write received bytes to the file
 					if(fwrite(request, 1, nRx, file) != nRx){
 						printf("write Error");
 						fclose(file);
 						break;
 					}
+					//Estimate and print byte rate of the last 5MBs
 					bytesSinceLastClock += nRx;
 					if(bytesSinceLastClock >= 5000000){
 					    putchar('\r');
 					    printf("Bit Rate: %.2lf kB/s        ",(bytesSinceLastClock/((clock()-timeint)/(double)CLOCKS_PER_SEC))/1000);
+						//Reset variables used to estimate byte rate
                         bytesSinceLastClock = 0;
                         timeint = clock ();
 					}
 				}
 			}
+			
+			//close file
 			if(fclose(file) == 0)
 				printf("\nFILE RECEIVED!!\n");
 			else printf("File close failed\n");
 		}
-		else if(request[0] == 'd'){//download
+		else if(request[0] == 'd'){//download mode
 		    printf("File Being Downloaded\n");
+			
+			//use SendFile to send the file. if file does not exist send the client 'x'
 			if(SendFile(request+1, &cSocket, response)==-1){
                 response[0]='x';
                 retVal = send(cSocket, response, 1, 0);
-                printf("File requested no exist!\n");
+                printf("File requested does not exist!\n");
 			}
 			else
                 printf("\nFile sent\n");
-		}else if(request[0] == 'l'){//list dir
+		}else if(request[0] == 'l'){//list directory contents using RunCmd with "dir" as the command
+
             if(RunCmd("dir", &cSocket) == 1)
                 printf("Server Directory Contents sent\n");
             else
                 printf("Command FAILED!!\n");
+
 		}else if(request[0]=='r'){//Remove file
-            if(remove(request+1) != 0){
+            //add 1 to request to skip the request character
+			if(remove(request+1) != 0){
                 perror( "Error deleting file\n" );
+				//if unsuccessful, send the client 'e'
                 response[0]='e';
                 retVal = send(cSocket, response, 1, 0);
 
@@ -351,6 +405,7 @@ int main(){
             else{
                 puts( "File successfully deleted\n" );
                 response[0]='k';
+				//if successful, send the client 'k'
                 retVal = send(cSocket, response, 1, 0);
             }
 		}
